@@ -13,6 +13,7 @@ import RegistersController from '#controllers/auth/registers_controller'
 import router from '@adonisjs/core/services/router'
 import { middleware } from './kernel.js'
 import PasswordResetController from '#controllers/auth/password_reset_conrollers_controller'
+import CoursesController from '#controllers/courses_controller'
 
 router.get('/', async () => {
   return {
@@ -41,3 +42,7 @@ router.group(()=>{
     router.post('logout',[LogoutsController,'logout']).as('auth.logout')
     router.get('me',[LoginController,'me']).as('auth.me')
 }).prefix('/api/v1/auth').use(middleware.auth({guards: ['web']}))
+
+router.group(()=>{
+  router.get('/latest', [CoursesController,'getLatest']).as('courses.latest')
+}).prefix('/api/courses')
