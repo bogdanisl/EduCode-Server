@@ -1,6 +1,6 @@
 // import type { HttpContext } from '@adonisjs/core/http'
 
-import User from "#models/user";
+import User from "#models/user/user";
 import { HttpContext } from "@adonisjs/core/http";
 
 export default class RegistersController {
@@ -55,7 +55,7 @@ export default class RegistersController {
     return response.status(201).json({
       code: 'SUCCESS',
       message: 'User registered successfully',
-      user: { id: user.id, fullName: user.fullName, email: user.email },
+      user: { id: user.id, fullName: user.fullName, email: user.email,role:user.role,lives:user.lives,lives_reset_at:user.livesResetAt },
     })
   }
     

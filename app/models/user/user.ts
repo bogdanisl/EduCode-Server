@@ -14,7 +14,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare id: number
 
   @column()
-  declare fullName: string | null
+  declare fullName: string
 
   @column()
   declare email: string
@@ -22,9 +22,21 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column({ serializeAs: null })
   declare password: string
 
+  @column()
+  declare role: 'admin' | 'user' | 'pro' | 'tester'
+
+  @column()
+  declare lives: number
+
+  @column.dateTime()
+  declare livesResetAt: DateTime | null
+
+  @column()
+  declare isActive: boolean
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime | null
+  declare updatedAt: DateTime
 }

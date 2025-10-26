@@ -1,6 +1,6 @@
 // import type { HttpContext } from '@adonisjs/core/http'
 
-import User from "#models/user";
+import User from "#models/user/user";
 import { HttpContext } from "@adonisjs/core/http";
 
 export default class LoginController {
@@ -51,7 +51,7 @@ try {
       return response.status(200).json({
         code: "SUCCESS",
         message: "Login successful",
-        user: { id: user.id, fullName: user.fullName, email: user.email },
+        user: { id: user.id, fullName: user.fullName, email: user.email,role:user.role,lives:user.lives,lives_reset_at:user.livesResetAt },
       });
     } catch (error) {
       return response.status(400).json({
