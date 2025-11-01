@@ -14,6 +14,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from './kernel.js'
 import PasswordResetController from '#controllers/auth/password_reset_conrollers_controller'
 import CoursesController from '#controllers/courses_controller'
+import CategoriesController from '#controllers/categories_controller'
 
 router.get('/', async () => {
   return {
@@ -27,6 +28,8 @@ router.post('/api/test', async ()=>{
   }
 })
 
+
+//auth
 router.group(()=>
   {
     router.post('register',[RegistersController,'register']).as('auth.register')
@@ -38,11 +41,18 @@ router.group(()=>
 ).prefix('/api/v1/auth')
 
 router.group(()=>{
-
     router.post('logout',[LogoutsController,'logout']).as('auth.logout')
     router.get('me',[LoginController,'me']).as('auth.me')
 }).prefix('/api/v1/auth').use(middleware.auth({guards: ['web']}))
 
+//Courses
 router.group(()=>{
-  router.get('/latest', [CoursesController,'getLatest']).as('courses.latest')
-}).prefix('/api/courses')
+  router.get('/course', [CoursesController,'index']).as('course.index')
+  router.get('/course/:id', [CoursesController,'show']).as('course.show')
+  router.post('/course',[CoursesController,'store']).as('course.store').use(middleware.adminAuth())
+}).prefix('/api')
+
+//Categories
+router.group(()=>{
+  router.get('/category',[CategoriesController,'get']).as('courses.categories')
+}).prefix('/api/course')

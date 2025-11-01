@@ -19,7 +19,9 @@ export default class Course extends BaseModel {
   @column()
   declare categoryId: number
 
-  @belongsTo(() => CourseCategory)
+ @belongsTo(() => CourseCategory, {
+    foreignKey: 'categoryId',
+  })
   declare category: BelongsTo<typeof CourseCategory>
 
   @column()
