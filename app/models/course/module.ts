@@ -1,25 +1,22 @@
-import { BaseModel, belongsTo, column, hasMany } from '@adonisjs/lucid/orm'
-import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
-
 import { DateTime } from 'luxon'
-import Task from '#models/task/task'
-import Module from './module.js'
+import { BaseModel, belongsTo, column, hasMany } from '@adonisjs/lucid/orm'
+import Lesson from './lesson.js'
+import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
+import Course from './course.js'
 
-export default class Lesson extends BaseModel {
+
+export default class Module extends BaseModel {
   @column({ isPrimary: true })
   declare id: number
 
   @column()
-  declare moduleId: number
+  declare courseId: number
 
   @column()
   declare title: string
 
   @column()
   declare description: string | null
-
-  @column()
-  declare difficultyLevel: 'beginner' | 'intermediate' | 'advanced' | null
 
   @column()
   declare order: number
@@ -31,9 +28,9 @@ export default class Lesson extends BaseModel {
   declare updatedAt: DateTime
 
   // Отношения
-  @belongsTo(() => Module, { foreignKey: 'moduleId' })
-  declare module: BelongsTo<typeof Module>
+  @belongsTo(() => Course, { foreignKey: 'courseId' })
+  declare course: BelongsTo<typeof Course>
 
-  @hasMany(() => Task, { foreignKey: 'lessonId' })
-  declare tasks: HasMany<typeof Task>
+  @hasMany(() => Lesson, { foreignKey: 'moduleId' })
+  declare lessons: HasMany<typeof Lesson>
 }

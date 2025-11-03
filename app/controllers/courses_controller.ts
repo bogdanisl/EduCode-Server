@@ -48,6 +48,21 @@ export default class CoursesController {
       const course = await Course.query()
         .where('id', id)
         .preload('category')
+        .preload('modules', (modulesQuery) => {
+          modulesQuery
+            .orderBy('order', 'asc') // сортировка модулей
+            .preload('lessons', (lessonsQuery) => {
+              lessonsQuery
+                .orderBy('order', 'asc') // сортировка уроков
+                .preload('tasks', (tasksQuery) => {
+                  tasksQuery
+                    .orderBy('order', 'asc')
+                    .preload('options', (optionsQuery) => {
+                      optionsQuery.orderBy('order', 'asc')
+                    })
+                })
+            })
+        })
         .first()
       console.log({ course })
       if (!course) {
@@ -87,7 +102,7 @@ export default class CoursesController {
   async destroy({ params, response }: HttpContext) {
     const course = await Course.findOrFail(params.id)
 
-    if(!course){
+    if (!course) {
       return response.notFound()
     }
     //await Drive.use().delete(`public/course/cover/${fileName}`) <== TODO: Delete images

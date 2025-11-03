@@ -1,7 +1,10 @@
-import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
-import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import CourseCategory from './course_category.js'
+// app/models/course.ts
 import { DateTime } from 'luxon'
+import { BaseModel, column, belongsTo, hasMany } from '@adonisjs/lucid/orm'
+import type { BelongsTo, HasMany} from '@adonisjs/lucid/types/relations'
+
+import CourseCategory from './course_category.js'
+import Module from './module.js'
 
 export default class Course extends BaseModel {
   @column({ isPrimary: true })
@@ -14,22 +17,24 @@ export default class Course extends BaseModel {
   declare description: string
 
   @column()
-  declare difficulty: string // наприклад: 'beginner' | 'intermediate' | 'advanced'
+  declare difficulty: 'beginner' | 'intermediate' | 'advanced'
 
   @column()
   declare categoryId: number
 
- @belongsTo(() => CourseCategory, {
-    foreignKey: 'categoryId',
-  })
-  declare category: BelongsTo<typeof CourseCategory>
-
   @column()
-  declare createdBy: number // ID користувача, який створив курс
+  declare createdBy: number
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
+
+  // Отношения
+  @belongsTo(() => CourseCategory, { foreignKey: 'categoryId' })
+  declare category: BelongsTo<typeof CourseCategory>
+
+  @hasMany(() => Module, { foreignKey: 'courseId' })
+  declare modules: HasMany<typeof Module>
 }

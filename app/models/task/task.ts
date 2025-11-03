@@ -1,8 +1,9 @@
-import { BaseModel, column, hasMany, belongsTo, manyToMany } from '@adonisjs/lucid/orm'
+import { BaseModel, column, hasMany, belongsTo } from '@adonisjs/lucid/orm'
 import Lesson from '../course/lesson.js'
 import TaskOption from './task_option.js'
 import TaskExample from './task_example.js'
-import type { BelongsTo, HasMany, ManyToMany } from '@adonisjs/lucid/types/relations'
+import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
+import { DateTime } from 'luxon'
 
 export default class Task extends BaseModel {
   @column({ isPrimary: true })
@@ -18,12 +19,19 @@ export default class Task extends BaseModel {
   declare description: string
 
   @column()
-  declare type: string // quiz | code | text
+  declare type: 'quiz' | 'code' | 'text'
 
   @column()
   declare order: number
 
-  @belongsTo(() => Lesson)
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  
+  // Отношения
+  @belongsTo(() => Lesson, { foreignKey: 'lessonId' })
   declare lesson: BelongsTo<typeof Lesson>
 
   @hasMany(() => TaskOption)
@@ -31,9 +39,5 @@ export default class Task extends BaseModel {
 
   @hasMany(() => TaskExample)
   declare examples: HasMany<typeof TaskExample>
-  @manyToMany(() => Lesson, {
-    pivotTable: 'lesson_tasks',
-    pivotColumns: ['order'],
-  })
-  declare lessons: ManyToMany<typeof Lesson>
+
 }
