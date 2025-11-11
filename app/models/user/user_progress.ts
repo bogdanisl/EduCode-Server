@@ -24,6 +24,12 @@ export default class UserProgress extends BaseModel {
   @column()
   declare isCompleted: boolean
 
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+
   @column.dateTime()
   declare lastViewedAt: DateTime | null
 

@@ -19,6 +19,7 @@ import ModulesController from '#controllers/modules_controller'
 import LessonsController from '#controllers/lessons_controller'
 import TasksController from '#controllers/tasks_controller'
 import TaskOptionsController from '#controllers/task_options_controller'
+import UserProgressController from '#controllers/user_progress_controller'
 
 router.get('/', async () => {
   return {
@@ -69,6 +70,8 @@ router.group(() => {
 }).prefix('/api')
 
 //Lessons
+router.get('/api/module/:moduleId/lesson/list',[LessonsController,'index']).as('lesson.index')
+router.get('/api/lesson/:id',[LessonsController,'show']).as('lesson.show')
 router.group(() => {
   router.post('/module/:moduleId/lesson', [LessonsController, 'store']).as('lesson.store')//.use(middleware.adminAuth())
   router.patch('/lesson/:id', [LessonsController, 'update']).as('lesson.update')//.use(middleware.adminAuth())
@@ -80,20 +83,21 @@ router.group(() => {
 //Tasks
 router.post('/api/lesson/:lessonId/task', [TasksController, 'store']).as('task.store')//.use(middleware.adminAuth())
 router.group(() => {
-    router.get('/:id', [TasksController, 'show']).as('task.show')
-    router.patch('/:id', [TasksController, 'update']).as('task.update')
-    router.delete('/:id', [TasksController, 'destroy']).as('task.delete')
-    router.patch('/:id/reorder', [TasksController, 'reorder']).as('task.reorder')
-  }).prefix('/api/task')//.use(middleware.adminAuth())
+  router.post('/:id/check',[TasksController,'check']).as('task.check')
+  router.get('/:id', [TasksController, 'show']).as('task.show')
+  router.patch('/:id', [TasksController, 'update']).as('task.update')
+  router.delete('/:id', [TasksController, 'destroy']).as('task.delete')
+  router.patch('/:id/reorder', [TasksController, 'reorder']).as('task.reorder')
+}).prefix('/api/task')//.use(middleware.adminAuth())
 
 
-  router.group(() => {
-    // Варианты ответа задания
-    router.get('/task/:taskId/options', [TaskOptionsController, 'index']).as('option.index')
-    router.post('/task/:taskId/option', [TaskOptionsController, 'store']).as('option.store')
-    
-    // CRUD для вариантов ответа
-    router
+router.group(() => {
+  // Варианты ответа задания
+  router.get('/task/:taskId/options', [TaskOptionsController, 'index']).as('option.index')
+  router.post('/task/:taskId/option', [TaskOptionsController, 'store']).as('option.store')
+
+  // CRUD для вариантов ответа
+  router
     .group(() => {
       router.get('/:id', [TaskOptionsController, 'show']).as('option.show')
       router.patch('/:id', [TaskOptionsController, 'update']).as('option.update')
@@ -103,4 +107,11 @@ router.group(() => {
     .prefix('/task-options')
     .use(middleware.adminAuth())
 })
-.prefix('/api')
+  .prefix('/api')
+
+  //User Progress
+  router.group(()=>{
+//TO DO: add enroll route
+    router.post('/enroll/:courseId', [UserProgressController,'enroll']).as('user_progress.enroll')
+    router.get('/progress',[UserProgressController,'index']).as('user_progress.index')
+  }).prefix('/api').use(middleware.auth({ guards: ['web'] }))

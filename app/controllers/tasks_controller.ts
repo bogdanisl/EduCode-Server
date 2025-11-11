@@ -5,6 +5,7 @@ import Module from '#models/course/module'
 import Task from '#models/task/task'
 import { taskValidator } from '#validators/task'
 import type { HttpContext } from '@adonisjs/core/http'
+import vine from '@vinejs/vine'
 
 
 export default class TasksController {
@@ -250,6 +251,78 @@ export default class TasksController {
       return response.ok({ message: 'Task reordered' })
     } catch (error) {
       return response.internalServerError({ error: error.message })
+    }
+  }
+
+  async check({ params, request, response }: HttpContext) {
+    const taskId = Number(params.id)
+
+    // 1. Получаем задачу
+    const task = await Task.query().where('id', taskId).firstOrFail()
+
+    // 2. Валидация входных данных в зависимости от типа
+    const payload = await this.validateRequest(task.type, request)
+
+    // 3. Проверка ответа
+    const isCorrect = await this.evaluateAnswer(task, payload)
+
+    // 4. Ответ
+    if (isCorrect) {
+      return response.ok({
+        correct: true,
+        message: 'Correct',
+      })
+    } else {
+      return response.badRequest({
+        correct: false,
+        message: 'Wrong!',
+      })
+    }
+  }
+
+  private async validateRequest(type: string, request: HttpContext['request']) {
+    const schemas = {
+      quiz: vine.object({
+        selectedOptionId: vine.number(),
+      }),
+      code: vine.object({
+        output: vine.string().trim(),
+      }),
+      text: vine.object({
+        answer: vine.string().trim(),
+      }),
+    }
+
+    const validator = vine.compile(schemas[type as keyof typeof schemas] || vine.object({}))
+    return validator.validate(request.body())
+  }
+
+  private async evaluateAnswer(task: Task, payload: any): Promise<boolean> {
+    switch (task.type) {
+      case 'quiz': {
+        // ВАЖНО: preload options!
+        await task.load('options')
+
+        const option = task.options.find((opt) => opt.id === payload.selectedOptionId)
+        console.log(option)
+        return option?.isCorrect == true
+      }
+
+      case 'code': {
+        const expected = (task.correctOutput || '').trim()
+        const received = (payload.output || '').trim()
+        return expected === received
+      }
+
+      case 'text': {
+        const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+        const expected = normalize(task.correctOutput || '')
+        const received = normalize(payload.answer || '')
+        return expected === received
+      }
+
+      default:
+        return false
     }
   }
 }

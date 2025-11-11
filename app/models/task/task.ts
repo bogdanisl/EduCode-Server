@@ -23,6 +23,12 @@ export default class Task extends BaseModel {
 
   @column()
   declare order: number
+  
+  @column()
+  declare correctOutput: string
+
+  @column()
+  declare startCode: string
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

@@ -3,16 +3,15 @@ import { BaseSchema } from '@adonisjs/lucid/schema'
 export default class extends BaseSchema {
   protected tableName = 'lessons'
 
-async up() {
+  async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id').primary()
-      table.integer('module_id').unsigned().references('id').inTable('modules').onDelete('CASCADE')
-      table.string('title').notNullable()
+      table.increments('id')
+      table.string('title', 255).notNullable()
       table.text('description').nullable()
-      table.enum('difficulty_level', ['beginner', 'intermediate', 'advanced']).nullable()
-      table.integer('order').defaultTo(0)
-      table.timestamp('created_at').defaultTo(this.now())
-      table.timestamp('updated_at').defaultTo(this.now())
+      table.string('difficulty_level', 100).nullable()
+      table.json('video_urls').nullable()
+      table.json('article_links').nullable()
+      table.timestamps(true)
     })
   }
 

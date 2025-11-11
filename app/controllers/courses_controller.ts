@@ -7,8 +7,13 @@ export default class CoursesController {
   async index({ response, request }: HttpContext) {
     const limit = Number(request.qs().limit) || 10
     const offset = Number(request.qs().offset) || 0
+    const categoryId = Number(request.qs().category)
+    
     try {
       const courses = await Course.query()
+        .if(categoryId, (query) => {
+          query.where('category_id', categoryId)
+        })
         .orderBy('created_at', 'desc')
         .offset(offset)
         .limit(limit)

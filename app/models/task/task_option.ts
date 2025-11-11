@@ -1,6 +1,6 @@
 import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
 import Task from './task.js'
-import  type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 
 export default class TaskOption extends BaseModel {
   @column({ isPrimary: true })
@@ -17,6 +17,10 @@ export default class TaskOption extends BaseModel {
 
   @column()
   declare order: number
+
+  @column()
+  declare language: string
+
 
   @belongsTo(() => Task)
   declare task: BelongsTo<typeof Task>
