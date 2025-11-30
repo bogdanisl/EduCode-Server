@@ -1,6 +1,7 @@
 // import type { HttpContext } from '@adonisjs/core/http'
 
 import Course from "#models/course/course";
+import UserProgress from "#models/user/user_progress";
 import { HttpContext } from "@adonisjs/core/http";
 
 export default class CoursesController {
@@ -8,7 +9,7 @@ export default class CoursesController {
     const limit = Number(request.qs().limit) || 10
     const offset = Number(request.qs().offset) || 0
     const categoryId = Number(request.qs().category)
-    
+
     try {
       const courses = await Course.query()
         .if(categoryId, (query) => {
@@ -47,18 +48,20 @@ export default class CoursesController {
 
     return response.created({ course })
   }
-  async show({ response, params }: HttpContext) {
-    const id = params.id
+  async show({ params, auth, response }: HttpContext) {
+    const courseId = Number(params.id)
+
     try {
+      // Загружаем курс со всей структурой
       const course = await Course.query()
-        .where('id', id)
+        .where('id', courseId)
         .preload('category')
         .preload('modules', (modulesQuery) => {
           modulesQuery
-            .orderBy('order', 'asc') // сортировка модулей
+            .orderBy('order', 'asc')
             .preload('lessons', (lessonsQuery) => {
               lessonsQuery
-                .orderBy('order', 'asc') // сортировка уроков
+                .orderBy('order', 'asc')
                 .preload('tasks', (tasksQuery) => {
                   tasksQuery
                     .orderBy('order', 'asc')
@@ -69,18 +72,34 @@ export default class CoursesController {
             })
         })
         .first()
-      console.log({ course })
+
       if (!course) {
-        return response.notFound()
+        return response.notFound({ message: 'Course not found' })
       }
-      else {
-        return response.ok({ course })
+
+      // Проверяем, авторизован ли пользователь
+      const user = auth.user
+      //console.log(user)
+      let enrolled = null
+
+      if (user) {
+        enrolled = await UserProgress.query()
+          .where('user_id', user.id)
+          .where('course_id', course.id)
+          .first()
       }
+
+      // Возвращаем курс + информацию о записи (если есть)
+      return response.ok({
+        course,
+        enrolled
+      })
+
     } catch (error) {
-      console.error(error.message)
+      console.error('Error in CourseController.show:', error)
       return response.internalServerError({
-        message: 'Error fetching course with id: ' + id,
-        error: error.message,
+        message: 'Ошибка при загрузке курса',
+        error: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   }

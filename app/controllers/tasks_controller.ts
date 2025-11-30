@@ -3,12 +3,15 @@ import Course from '#models/course/course'
 import Lesson from '#models/course/lesson'
 import Module from '#models/course/module'
 import Task from '#models/task/task'
+import CloudCodeRunnerService from '#services/code-runner.service'
 import { taskValidator } from '#validators/task'
 import type { HttpContext } from '@adonisjs/core/http'
 import vine from '@vinejs/vine'
 
+const runner = new CloudCodeRunnerService()
 
 export default class TasksController {
+
   /**
    * GET /lessons/:lessonId/tasks
    * Получить все задания урока
@@ -256,73 +259,75 @@ export default class TasksController {
 
   async check({ params, request, response }: HttpContext) {
     const taskId = Number(params.id)
+    const task = await Task.query().where('id', taskId).preload('options').firstOrFail()
 
-    // 1. Получаем задачу
-    const task = await Task.query().where('id', taskId).firstOrFail()
+    let isCorrect = false
+    let extra: any = {}
 
-    // 2. Валидация входных данных в зависимости от типа
-    const payload = await this.validateRequest(task.type, request)
-
-    // 3. Проверка ответа
-    const isCorrect = await this.evaluateAnswer(task, payload)
-
-    // 4. Ответ
-    if (isCorrect) {
-      return response.ok({
-        correct: true,
-        message: 'Correct',
-      })
-    } else {
-      return response.badRequest({
-        correct: false,
-        message: 'Wrong!',
-      })
-    }
-  }
-
-  private async validateRequest(type: string, request: HttpContext['request']) {
-    const schemas = {
-      quiz: vine.object({
-        selectedOptionId: vine.number(),
-      }),
-      code: vine.object({
-        output: vine.string().trim(),
-      }),
-      text: vine.object({
-        answer: vine.string().trim(),
-      }),
-    }
-
-    const validator = vine.compile(schemas[type as keyof typeof schemas] || vine.object({}))
-    return validator.validate(request.body())
-  }
-
-  private async evaluateAnswer(task: Task, payload: any): Promise<boolean> {
     switch (task.type) {
       case 'quiz': {
-        // ВАЖНО: preload options!
+        const { selectedOptionId } = await this.validateQuiz(request)
+        console.log(selectedOptionId)
         await task.load('options')
-
-        const option = task.options.find((opt) => opt.id === payload.selectedOptionId)
-        console.log(option)
-        return option?.isCorrect == true
-      }
-
-      case 'code': {
-        const expected = (task.correctOutput || '').trim()
-        const received = (payload.output || '').trim()
-        return expected === received
+        const option = task.options.find((opt) => opt.id === selectedOptionId)
+        isCorrect = option?.isCorrect == true
+        break
       }
 
       case 'text': {
+        const { answer } = await this.validateText(request)
         const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
-        const expected = normalize(task.correctOutput || '')
-        const received = normalize(payload.answer || '')
-        return expected === received
+        isCorrect = normalize(task.correctOutput || '') === normalize(answer)
+        break
+      }
+
+      case 'code': {
+        const { code } = await this.validateCode(request)
+
+        // Запускаем код через Judge0 Cloud
+        const result = await runner.execute(code, task.language === 'javascript' ? 63 : 74)
+
+        const expected = (task.correctOutput || '').trim()
+        const received = result.output.trim()
+
+        isCorrect = result.success && received === expected
+
+        // Возвращаем всё, что нужно фронтенду
+        extra = {
+          output: result.output,
+          console: result.console,
+          error: result.error,
+        }
+
+        break
       }
 
       default:
-        return false
+        return response.badRequest({ message: 'Unknown task type' })
     }
+
+    return response.json({
+      correct: isCorrect,
+      ...extra,
+    })
   }
+
+  private async validateQuiz(request: HttpContext['request']) {
+    const schema = vine.object({ selectedOptionId: vine.number() })
+    const validator = vine.compile(schema)
+    return validator.validate(request.body())
+  }
+
+  private async validateText(request: HttpContext['request']) {
+    const schema = vine.object({ answer: vine.string().trim() })
+    const validator = vine.compile(schema)
+    return validator.validate(request.body())
+  }
+
+  private async validateCode(request: HttpContext['request']) {
+    const schema = vine.object({ code: vine.string() })
+    const validator = vine.compile(schema)
+    return validator.validate(request.body())
+  }
+
 }

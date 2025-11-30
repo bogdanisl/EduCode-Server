@@ -52,7 +52,7 @@ router.group(() => {
 //Courses
 router.group(() => {
   router.get('/course', [CoursesController, 'index']).as('course.index')
-  router.get('/course/:id', [CoursesController, 'show']).as('course.show')
+  router.get('/course/:id', [CoursesController, 'show']).as('course.show').use(middleware.auth({ optional: true }))
   router.post('/course', [CoursesController, 'store']).as('course.store').use(middleware.adminAuth())
   router.patch('/course', [CoursesController, 'update']).as('course.update').use(middleware.adminAuth())
   router.delete('/course', [CoursesController, 'destroy']).as('course.delete').use(middleware.adminAuth())

@@ -23,6 +23,9 @@ export default class Task extends BaseModel {
 
   @column()
   declare order: number
+
+  @column()
+  declare language: string
   
   @column()
   declare correctOutput: string
