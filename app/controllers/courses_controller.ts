@@ -1,6 +1,9 @@
 // import type { HttpContext } from '@adonisjs/core/http'
 
 import Course from "#models/course/course";
+import Lesson from "#models/course/lesson";
+import Module from "#models/course/module";
+import Task from "#models/task/task";
 import UserProgress from "#models/user/user_progress";
 import { HttpContext } from "@adonisjs/core/http";
 
@@ -28,16 +31,29 @@ export default class CoursesController {
     }
   }
   async store({ auth, request, response }: HttpContext) {
-    const data = request.only(['title', 'description', 'difficulty', 'categoryId'])
+    const data = request.only(['title', 'description', 'difficulty', 'categoryId', 'modules'])
     const cover = request.file('cover')
 
+    console.log("Incoming data:", data)
 
+    // Парсим modules (т.к. с фронта приходит строка)
+    let modules = []
+    try {
+      modules = typeof data.modules === 'string' ? JSON.parse(data.modules) : data.modules
+    } catch (e) {
+      return response.badRequest({ error: "Invalid modules format" })
+    }
 
+    // Создаём курс
     const course = await Course.create({
-      ...data,
+      title: data.title,
+      description: data.description,
+      difficulty: data.difficulty,
+      categoryId: Number(data.categoryId),
       createdBy: auth.user!.id
     })
 
+    // Загружаем обложку
     if (cover) {
       if (!cover.isValid) {
         return response.badRequest({ error: cover.errors })
@@ -45,12 +61,72 @@ export default class CoursesController {
       await cover.move('public/assets/courses/covers', { name: `${course.id}.png` })
     }
 
+    // ============================
+    //   СОЗДАЁМ МОДУЛИ
+    // ============================
 
-    return response.created({ course })
+    for (let moduleIndex = 0; moduleIndex < modules.length; moduleIndex++) {
+      const moduleFromClient = modules[moduleIndex]
+
+      const createdModule = await Module.create({
+        courseId: course.id,
+        title: moduleFromClient.title,
+        description: moduleFromClient.description || null,
+        order: moduleIndex, // правильный порядок
+      })
+
+      const lessons = moduleFromClient.lessons || []
+
+      // ============================
+      //   СОЗДАЁМ УРОКИ
+      // ============================
+
+      for (let lessonIndex = 0; lessonIndex < lessons.length; lessonIndex++) {
+        const lessonFromClient = lessons[lessonIndex]
+
+        const createdLesson = await Lesson.create({
+          moduleId: createdModule.id,
+          title: lessonFromClient.title,
+          description: lessonFromClient.description || null,
+          difficultyLevel: lessonFromClient.difficultyLevel || null,
+          order: lessonIndex, // правильный порядок
+        })
+
+        const tasks = lessonFromClient.tasks || []
+
+        // ============================
+        //   СОЗДАЁМ ЗАДАНИЯ
+        // ============================
+
+        for (let taskIndex = 0; taskIndex < tasks.length; taskIndex++) {
+          const taskFromClient = tasks[taskIndex]
+
+          const createdTask = await Task.create({
+            lessonId: createdLesson.id,
+            title: taskFromClient.title,
+            description: taskFromClient.description,
+            type: taskFromClient.type,
+            order: taskIndex, // правильный порядок
+            language: taskFromClient.language || "",     // обязательно
+            correctOutput: taskFromClient.expectedText || taskFromClient.correctOutput || "",
+            startCode: taskFromClient.startCode || "",
+          })
+
+          // Если будут options/examples — напишу также
+        }
+      }
+    }
+
+    
+
+    return response.ok({
+      message: "Course created successfully",
+      courseId: course.id
+    })
   }
   async show({ params, auth, response }: HttpContext) {
     const courseId = Number(params.id)
-
+    console.log('Course show')
     try {
       // Загружаем курс со всей структурой
       const course = await Course.query()

@@ -60,8 +60,8 @@ router.group(() => {
 
 //Categories
 router.group(() => {
-  router.get('/category', [CategoriesController, 'get']).as('courses.categories')
-}).prefix('/api/course')
+  router.get('/category/list', [CategoriesController, 'get']).as('categories.list')
+}).prefix('/api/courses')
 
 //Modules
 router.group(() => {
