@@ -6,6 +6,8 @@ import Module from "#models/course/module";
 import Task from "#models/task/task";
 import UserProgress from "#models/user/user_progress";
 import { HttpContext } from "@adonisjs/core/http";
+import db from '@adonisjs/lucid/services/db'
+
 
 export default class CoursesController {
   async index({ response, request }: HttpContext) {
@@ -34,7 +36,7 @@ export default class CoursesController {
     const data = request.only(['title', 'description', 'difficulty', 'categoryId', 'modules'])
     const cover = request.file('cover')
 
-    console.log("Incoming data:", data)
+    //console.log("Incoming data:", data)
 
     // Парсим modules (т.к. с фронта приходит строка)
     let modules = []
@@ -52,6 +54,7 @@ export default class CoursesController {
       categoryId: Number(data.categoryId),
       createdBy: auth.user!.id
     })
+
 
     // Загружаем обложку
     if (cover) {
@@ -101,7 +104,7 @@ export default class CoursesController {
         for (let taskIndex = 0; taskIndex < tasks.length; taskIndex++) {
           const taskFromClient = tasks[taskIndex]
 
-          const createdTask = await Task.create({
+          await Task.create({
             lessonId: createdLesson.id,
             title: taskFromClient.title,
             description: taskFromClient.description,
@@ -117,7 +120,7 @@ export default class CoursesController {
       }
     }
 
-    
+
 
     return response.ok({
       message: "Course created successfully",
@@ -179,24 +182,151 @@ export default class CoursesController {
       })
     }
   }
-  async update({ auth, params, request, response }: HttpContext) {
-    const course = await Course.findOrFail(params.id)
+  async update({ request, response, params }: HttpContext) {
+    const courseId = params.id
 
-    // Опционально: проверка прав (только создатель или админ)
-    if (course.createdBy !== auth.user!.id) {
-      return response.forbidden({ message: 'Access denied' })
-    }
-
-    const data = request.only(['title', 'description', 'difficulty', 'categoryId'])
+    const data = request.only(['title', 'description', 'difficulty', 'categoryId', 'price', 'modules'])
     const cover = request.file('cover')
 
-    if (cover) {
-      if (!cover.isValid) return response.badRequest({ error: cover.errors })
+    let modules = []
+    try {
+      modules = typeof data.modules === 'string' ? JSON.parse(data.modules) : data.modules
+      if (!Array.isArray(modules)) throw new Error()
+    } catch (e) {
+      return response.badRequest({ error: "Invalid modules format" })
+    }
 
-      course.merge(data)
+    // Начинаем транзакцию — всё или ничего
+    const trx = await db.transaction();
+
+    try {
+      // 1. Находим курс
+      const course = await Course.find(courseId, { client: trx })
+      if (!course) {
+        await trx.rollback()
+        return response.notFound({ error: "Course not found" })
+      }
+
+      // 2. Обновляем основные поля
+      course.merge({
+        title: data.title,
+        description: data.description,
+        difficulty: data.difficulty,
+        categoryId: Number(data.categoryId),
+      })
       await course.save()
+      console.log(course);
+      console.log(data.difficulty);
 
-      return response.ok({ course })
+      // 3. Обрабатываем новую обложку (если пришла)
+      if (cover) {
+        if (!cover.isValid) {
+          await trx.rollback()
+          return response.badRequest({ error: cover.errors })
+        }
+
+        // Удаляем старую обложку, если была
+        // const oldCoverPath = `public/assets/courses/covers/${course.id}.png`
+        // try {
+        //   await Drive.delete(oldCoverPath)
+        // } catch (_) { }
+
+        // Сохраняем новую
+        await cover.move('public/assets/courses/covers', {
+          name: `${course.id}.png`,
+          overwrite: true,
+        })
+      }
+
+      // 4. Удаляем ВСЕ старые модули с их уроками и заданиями
+      // await Module.query({ client: trx })
+      //   .where('courseId', course.id)
+      //   .delete() // каскадно удалит уроки и задания, если в БД настроен ON DELETE CASCADE
+      // Если каскада нет — раскомменти ниже
+
+      // Если в миграциях НЕ настроен cascade delete — раскомменти:
+
+      const moduleIds = await Module.query({ client: trx })
+        .where('courseId', course.id)
+        .select('id')
+
+      for (const { id } of moduleIds) {
+        const lessonIds = await Lesson.query({ client: trx }).where('moduleId', id).select('id')
+
+        for (const { id: lessonId } of lessonIds) {
+          await Task.query({ client: trx }).where('lessonId', lessonId).delete()
+        }
+
+        await Lesson.query({ client: trx }).where('moduleId', id).delete()
+        //await Task.query({ client: trx }).where('moduleId', id).delete() // если по ошибке
+      }
+      await Module.query({ client: trx }).where('courseId', course.id).delete()
+      // await Module.query({ client: trx })
+      //   .where('courseId', course.id)
+      //   .delete()
+
+      //  // 5. Создаём модули заново — точно так же, как в store()
+      for (let moduleIndex = 0; moduleIndex < modules.length; moduleIndex++) {
+        const moduleFromClient = modules[moduleIndex]
+
+        const createdModule = await Module.create(
+          {
+            courseId: course.id,
+            title: moduleFromClient.title,
+            description: moduleFromClient.description || null,
+            order: moduleIndex,
+          },
+          { client: trx }
+        )
+
+        const lessons = moduleFromClient.lessons || []
+
+        for (let lessonIndex = 0; lessonIndex < lessons.length; lessonIndex++) {
+          const lessonFromClient = lessons[lessonIndex]
+
+          const createdLesson = await Lesson.create(
+            {
+              moduleId: createdModule.id,
+              title: lessonFromClient.title,
+              description: lessonFromClient.description || null,
+              difficultyLevel: lessonFromClient.difficultyLevel || null,
+              order: lessonIndex,
+            },
+            { client: trx }
+          )
+
+          const tasks = lessonFromClient.tasks || []
+
+          for (let taskIndex = 0; taskIndex < tasks.length; taskIndex++) {
+            const taskFromClient = tasks[taskIndex]
+
+            await Task.create(
+              {
+                lessonId: createdLesson.id,
+                title: taskFromClient.title,
+                description: taskFromClient.description || null,
+                type: taskFromClient.type,
+                order: taskIndex,
+                language: taskFromClient.language || "",
+                correctOutput: taskFromClient.expectedText || taskFromClient.correctOutput || "",
+                startCode: taskFromClient.startCode || "",
+              },
+              { client: trx }
+            )
+          }
+        }
+      }
+
+      await trx.commit()
+
+      return response.ok({
+        message: "Course updated successfully",
+        courseId: course.id,
+      })
+    } catch (error) {
+      await trx.rollback()
+      console.error("Course update failed:", error)
+      return response.internalServerError({ error: "Failed to update course" })
     }
   }
   async destroy({ params, response }: HttpContext) {
@@ -205,8 +335,27 @@ export default class CoursesController {
     if (!course) {
       return response.notFound()
     }
+    const trx = await db.transaction();
+
+    const moduleIds = await Module.query({ client: trx })
+      .where('courseId', course.id)
+      .select('id')
+
+    for (const { id } of moduleIds) {
+      const lessonIds = await Lesson.query({ client: trx }).where('moduleId', id).select('id')
+
+      for (const { id: lessonId } of lessonIds) {
+        await Task.query({ client: trx }).where('lessonId', lessonId).delete()
+      }
+
+      await Lesson.query({ client: trx }).where('moduleId', id).delete()
+      //await Task.query({ client: trx }).where('moduleId', id).delete() // если по ошибке
+    }
+    await Module.query({ client: trx }).where('courseId', course.id).delete()
     //await Drive.use().delete(`public/course/cover/${fileName}`) <== TODO: Delete images
     await course.delete()
+    await trx.commit()
+
     return response.ok({ message: 'Course deleted' })
   }
 }

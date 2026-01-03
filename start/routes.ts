@@ -20,6 +20,7 @@ import LessonsController from '#controllers/lessons_controller'
 import TasksController from '#controllers/tasks_controller'
 import TaskOptionsController from '#controllers/task_options_controller'
 import UserProgressController from '#controllers/user_progress_controller'
+import UsersController from '#controllers/users_controller'
 
 router.get('/', async () => {
   return {
@@ -54,13 +55,14 @@ router.group(() => {
   router.get('/course', [CoursesController, 'index']).as('course.index')
   router.get('/course/:id', [CoursesController, 'show']).as('course.show').use(middleware.auth({ optional: true }))
   router.post('/course', [CoursesController, 'store']).as('course.store').use(middleware.adminAuth())
-  router.patch('/course', [CoursesController, 'update']).as('course.update').use(middleware.adminAuth())
-  router.delete('/course', [CoursesController, 'destroy']).as('course.delete').use(middleware.adminAuth())
+  router.patch('/course/:id', [CoursesController, 'update']).as('course.update').use(middleware.adminAuth())
+  router.delete('/course/:id', [CoursesController, 'destroy']).as('course.delete').use(middleware.adminAuth())
 }).prefix('/api')
 
 //Categories
 router.group(() => {
   router.get('/category/list', [CategoriesController, 'get']).as('categories.list')
+  router.post('/category', [CategoriesController, 'store']).as('categories.store')
 }).prefix('/api/courses')
 
 //Modules
@@ -70,8 +72,8 @@ router.group(() => {
 }).prefix('/api')
 
 //Lessons
-router.get('/api/module/:moduleId/lesson/list',[LessonsController,'index']).as('lesson.index')
-router.get('/api/lesson/:id',[LessonsController,'show']).as('lesson.show')
+router.get('/api/module/:moduleId/lesson/list', [LessonsController, 'index']).as('lesson.index')
+router.get('/api/lesson/:id', [LessonsController, 'show']).as('lesson.show')
 router.group(() => {
   router.post('/module/:moduleId/lesson', [LessonsController, 'store']).as('lesson.store')//.use(middleware.adminAuth())
   router.patch('/lesson/:id', [LessonsController, 'update']).as('lesson.update')//.use(middleware.adminAuth())
@@ -83,7 +85,7 @@ router.group(() => {
 //Tasks
 router.post('/api/lesson/:lessonId/task', [TasksController, 'store']).as('task.store')//.use(middleware.adminAuth())
 router.group(() => {
-  router.post('/:id/check',[TasksController,'check']).as('task.check')
+  router.post('/:id/check', [TasksController, 'check']).as('task.check')
   router.get('/:id', [TasksController, 'show']).as('task.show')
   router.patch('/:id', [TasksController, 'update']).as('task.update')
   router.delete('/:id', [TasksController, 'destroy']).as('task.delete')
@@ -109,9 +111,18 @@ router.group(() => {
 })
   .prefix('/api')
 
-  //User Progress
-  router.group(()=>{
-//TO DO: add enroll route
-    router.post('/enroll/:courseId', [UserProgressController,'enroll']).as('user_progress.enroll')
-    router.get('/progress',[UserProgressController,'index']).as('user_progress.index')
-  }).prefix('/api').use(middleware.auth({ guards: ['web'] }))
+//User Progress
+router.group(() => {
+  //TO DO: add enroll route
+  router.post('/enroll/:courseId', [UserProgressController, 'enroll']).as('user_progress.enroll')
+  router.get('/progress', [UserProgressController, 'index']).as('user_progress.index')
+}).prefix('/api').use(middleware.auth({ guards: ['web'] }))
+
+
+// Users (Admin access only)
+router.group(() => {
+  router.get('/users', [UsersController, 'index']).as('users.index');
+  router.get('/users/:id', [UsersController, 'show']).as('users.show');
+  router.put('/users/:id',[UsersController,'update']).as('users.update');
+  router.delete('/users/:id',[UsersController,'destroy']).as('user.delete');
+}).prefix('/api').use(middleware.adminAuth());

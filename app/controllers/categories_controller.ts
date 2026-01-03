@@ -22,4 +22,25 @@ export default class CategoriesController {
             })
         }
     }
+
+    public async store({ response, request }: HttpContext) {
+        try {
+            const data = request.only(['title', 'description']);
+            console.log(data);
+            if (!data || !data.title || !data.description) {
+                return response.badRequest({ error: "Fields cannot be empty" });
+            }
+            const category = await CourseCategory.create({
+                name: data.title,
+                description: data.description,
+            })
+            if (!category) {
+                return response.badGateway();
+            }
+            return response.created(category);
+        }
+        catch (err) {
+            return response.badGateway();
+        }
+    }
 }
