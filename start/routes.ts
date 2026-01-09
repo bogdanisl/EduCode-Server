@@ -54,9 +54,9 @@ router.group(() => {
 router.group(() => {
   router.get('/course', [CoursesController, 'index']).as('course.index')
   router.get('/course/:id', [CoursesController, 'show']).as('course.show').use(middleware.auth({ optional: true }))
-  router.post('/course', [CoursesController, 'store']).as('course.store').use(middleware.adminAuth())
-  router.patch('/course/:id', [CoursesController, 'update']).as('course.update').use(middleware.adminAuth())
-  router.delete('/course/:id', [CoursesController, 'destroy']).as('course.delete').use(middleware.adminAuth())
+  router.post('/course', [CoursesController, 'store']).as('course.store').use(middleware.autorAuth())
+  router.patch('/course/:id', [CoursesController, 'update']).as('course.update').use(middleware.autorAuth())
+  router.delete('/course/:id', [CoursesController, 'destroy']).as('course.delete').use(middleware.autorAuth())
 }).prefix('/api')
 
 //Categories

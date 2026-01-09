@@ -13,12 +13,42 @@ export default class CoursesController {
   async index({ response, request }: HttpContext) {
     const limit = Number(request.qs().limit) || 10
     const offset = Number(request.qs().offset) || 0
-    const categoryId = Number(request.qs().category)
+
+    const categoriesParam = request.qs().categories
+    const difficultiesParam = request.qs().difficulties
+    const searchText = request.qs().searchText;
+
+    let categoryIds: number[] = []
+    let difficulties: string[] = []
+
+    // ---- categories ----
+    if (Array.isArray(categoriesParam)) {
+      categoryIds = categoriesParam.map(Number).filter(Boolean)
+    }
+
+    if (typeof categoriesParam === 'string') {
+      categoryIds = categoriesParam.split(',').map(Number).filter(Boolean)
+    }
+
+    // ---- difficulties (string column) ----
+    if (Array.isArray(difficultiesParam)) {
+      difficulties = difficultiesParam.map(String).filter(Boolean)
+    }
+
+    if (typeof difficultiesParam === 'string') {
+      difficulties = difficultiesParam.split(',').map(String).filter(Boolean)
+    }
 
     try {
       const courses = await Course.query()
-        .if(categoryId, (query) => {
-          query.where('category_id', categoryId)
+        .if(categoryIds.length > 0, (query) => {
+          query.whereIn('category_id', categoryIds)
+        })
+        .if(difficulties.length > 0, (query) => {
+          query.whereIn('difficulty', difficulties)
+        })
+        .if(searchText!== undefined && searchText.trim() !== '', (query) => {
+          query.where('title', 'like', `%${searchText}%`)
         })
         .orderBy('created_at', 'desc')
         .offset(offset)
@@ -182,11 +212,12 @@ export default class CoursesController {
       })
     }
   }
-  async update({ request, response, params }: HttpContext) {
+  async update({ request, response, params, auth }: HttpContext) {
     const courseId = params.id
 
     const data = request.only(['title', 'description', 'difficulty', 'categoryId', 'price', 'modules'])
     const cover = request.file('cover')
+
 
     let modules = []
     try {
@@ -205,6 +236,11 @@ export default class CoursesController {
       if (!course) {
         await trx.rollback()
         return response.notFound({ error: "Course not found" })
+      }
+      const user = auth.user
+      if (course.createdBy !== user?.id) {
+        await trx.rollback();
+        return response.unauthorized({ error: "You are not authorized to update this course" });
       }
 
       // 2. Обновляем основные поля
@@ -329,11 +365,15 @@ export default class CoursesController {
       return response.internalServerError({ error: "Failed to update course" })
     }
   }
-  async destroy({ params, response }: HttpContext) {
+  async destroy({ params, response, auth }: HttpContext) {
     const course = await Course.findOrFail(params.id)
 
     if (!course) {
       return response.notFound()
+    }
+    const user = auth.user
+    if (course.createdBy !== user?.id) {
+      return response.unauthorized({ error: "You are not authorized to update this course" });
     }
     const trx = await db.transaction();
 
