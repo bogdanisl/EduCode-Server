@@ -4,6 +4,7 @@ import Course from "#models/course/course";
 import Lesson from "#models/course/lesson";
 import Module from "#models/course/module";
 import Task from "#models/task/task";
+import TaskOption from "#models/task/task_option";
 import UserProgress from "#models/user/user_progress";
 import { HttpContext } from "@adonisjs/core/http";
 import db from '@adonisjs/lucid/services/db'
@@ -47,7 +48,7 @@ export default class CoursesController {
         .if(difficulties.length > 0, (query) => {
           query.whereIn('difficulty', difficulties)
         })
-        .if(searchText!== undefined && searchText.trim() !== '', (query) => {
+        .if(searchText !== undefined && searchText.trim() !== '', (query) => {
           query.where('title', 'like', `%${searchText}%`)
         })
         .orderBy('created_at', 'desc')
@@ -134,7 +135,7 @@ export default class CoursesController {
         for (let taskIndex = 0; taskIndex < tasks.length; taskIndex++) {
           const taskFromClient = tasks[taskIndex]
 
-          await Task.create({
+          const createdTask = await Task.create({
             lessonId: createdLesson.id,
             title: taskFromClient.title,
             description: taskFromClient.description,
@@ -145,6 +146,20 @@ export default class CoursesController {
             startCode: taskFromClient.startCode || "",
           })
 
+          const options = taskFromClient.options || []
+
+          if (taskFromClient.type === 'quiz') {
+            for (let optionIndex = 0; optionIndex < options.length; optionIndex++) {
+              const optionFromClient = options[optionIndex];
+              const correctIndex = taskFromClient.correctOption;
+              await TaskOption.create({
+                taskId: createdTask.id,
+                text: optionFromClient,
+                isCorrect: optionIndex == correctIndex ? true : false,
+                order: optionIndex,
+              })
+            }
+          }
           // Если будут options/examples — напишу также
         }
       }
@@ -195,13 +210,14 @@ export default class CoursesController {
         enrolled = await UserProgress.query()
           .where('user_id', user.id)
           .where('course_id', course.id)
+          .preload('course')
           .first()
       }
-
+      
       // Возвращаем курс + информацию о записи (если есть)
       return response.ok({
         course,
-        enrolled
+        enrolled,
       })
 
     } catch (error) {
@@ -215,11 +231,12 @@ export default class CoursesController {
   async update({ request, response, params, auth }: HttpContext) {
     const courseId = params.id
 
-    const data = request.only(['title', 'description', 'difficulty', 'categoryId', 'price', 'modules'])
+    // Получаем данные с фронта
+    const data = request.only(['title', 'description', 'difficulty', 'categoryId', 'modules'])
     const cover = request.file('cover')
 
-
-    let modules = []
+    // Парсим модули
+    let modules: any[] = []
     try {
       modules = typeof data.modules === 'string' ? JSON.parse(data.modules) : data.modules
       if (!Array.isArray(modules)) throw new Error()
@@ -227,23 +244,24 @@ export default class CoursesController {
       return response.badRequest({ error: "Invalid modules format" })
     }
 
-    // Начинаем транзакцию — всё или ничего
-    const trx = await db.transaction();
+    const trx = await db.transaction()
 
     try {
-      // 1. Находим курс
+      // 1️⃣ Находим курс
       const course = await Course.find(courseId, { client: trx })
       if (!course) {
         await trx.rollback()
         return response.notFound({ error: "Course not found" })
       }
+
+      // 2️⃣ Проверка авторства
       const user = auth.user
-      if (course.createdBy !== user?.id) {
-        await trx.rollback();
-        return response.unauthorized({ error: "You are not authorized to update this course" });
+      if (course.createdBy !== user?.id && user?.role !== 'admin') {
+        await trx.rollback()
+        return response.unauthorized({ error: "You are not authorized to update this course" })
       }
 
-      // 2. Обновляем основные поля
+      // 3️⃣ Обновляем основные поля курса
       course.merge({
         title: data.title,
         description: data.description,
@@ -251,104 +269,163 @@ export default class CoursesController {
         categoryId: Number(data.categoryId),
       })
       await course.save()
-      console.log(course);
-      console.log(data.difficulty);
 
-      // 3. Обрабатываем новую обложку (если пришла)
+      // 4️⃣ Обрабатываем новую обложку
       if (cover) {
         if (!cover.isValid) {
           await trx.rollback()
           return response.badRequest({ error: cover.errors })
         }
 
-        // Удаляем старую обложку, если была
-        // const oldCoverPath = `public/assets/courses/covers/${course.id}.png`
-        // try {
-        //   await Drive.delete(oldCoverPath)
-        // } catch (_) { }
-
-        // Сохраняем новую
         await cover.move('public/assets/courses/covers', {
           name: `${course.id}.png`,
           overwrite: true,
         })
       }
 
-      // 4. Удаляем ВСЕ старые модули с их уроками и заданиями
-      // await Module.query({ client: trx })
-      //   .where('courseId', course.id)
-      //   .delete() // каскадно удалит уроки и задания, если в БД настроен ON DELETE CASCADE
-      // Если каскада нет — раскомменти ниже
+      // 5️⃣ Работа с модулями
 
-      // Если в миграциях НЕ настроен cascade delete — раскомменти:
-
-      const moduleIds = await Module.query({ client: trx })
+      const incomingModuleIds = modules.filter(m => m.id).map(m => m.id)
+      // Удаляем модули, которых больше нет
+      await Module.query({ client: trx })
         .where('courseId', course.id)
-        .select('id')
+        .whereNotIn('id', incomingModuleIds)
+        .delete()
 
-      for (const { id } of moduleIds) {
-        const lessonIds = await Lesson.query({ client: trx }).where('moduleId', id).select('id')
-
-        for (const { id: lessonId } of lessonIds) {
-          await Task.query({ client: trx }).where('lessonId', lessonId).delete()
-        }
-
-        await Lesson.query({ client: trx }).where('moduleId', id).delete()
-        //await Task.query({ client: trx }).where('moduleId', id).delete() // если по ошибке
-      }
-      await Module.query({ client: trx }).where('courseId', course.id).delete()
-      // await Module.query({ client: trx })
-      //   .where('courseId', course.id)
-      //   .delete()
-
-      //  // 5. Создаём модули заново — точно так же, как в store()
+      // Обрабатываем каждый модуль
       for (let moduleIndex = 0; moduleIndex < modules.length; moduleIndex++) {
-        const moduleFromClient = modules[moduleIndex]
+        const moduleData = modules[moduleIndex]
+        let module: Module | null
 
-        const createdModule = await Module.create(
-          {
-            courseId: course.id,
-            title: moduleFromClient.title,
-            description: moduleFromClient.description || null,
+        module = await Module.find(moduleData.id, { client: trx })
+        if (module) {
+          // UPDATE
+          module.merge({
+            title: moduleData.title,
+            description: moduleData.description || null,
             order: moduleIndex,
-          },
-          { client: trx }
-        )
-
-        const lessons = moduleFromClient.lessons || []
-
-        for (let lessonIndex = 0; lessonIndex < lessons.length; lessonIndex++) {
-          const lessonFromClient = lessons[lessonIndex]
-
-          const createdLesson = await Lesson.create(
+          })
+          await module.save()
+        } else {
+          // CREATE
+          module = await Module.create(
             {
-              moduleId: createdModule.id,
-              title: lessonFromClient.title,
-              description: lessonFromClient.description || null,
-              difficultyLevel: lessonFromClient.difficultyLevel || null,
-              order: lessonIndex,
+              courseId: course.id,
+              title: moduleData.title,
+              description: moduleData.description || null,
+              order: moduleIndex,
             },
             { client: trx }
           )
+        }
 
-          const tasks = lessonFromClient.tasks || []
+        // 6️⃣ Работа с уроками
+        const incomingLessonIds = (moduleData.lessons || []).filter((l: Lesson) => l.id).map((l: Lesson) => l.id)
 
-          for (let taskIndex = 0; taskIndex < tasks.length; taskIndex++) {
-            const taskFromClient = tasks[taskIndex]
+        await Lesson.query({ client: trx })
+          .where('moduleId', module.id)
+          .whereNotIn('id', incomingLessonIds)
+          .delete()
 
-            await Task.create(
+        for (let lessonIndex = 0; lessonIndex < (moduleData.lessons || []).length; lessonIndex++) {
+          const lessonData = moduleData.lessons[lessonIndex]
+          let lesson: Lesson | null
+
+          lesson = await Lesson.find(lessonData.id, { client: trx })
+          if (lesson) {
+            lesson.merge({
+              title: lessonData.title,
+              description: lessonData.description || null,
+              difficultyLevel: lessonData.difficultyLevel || null,
+              order: lessonIndex,
+            })
+            await lesson.save()
+          } else {
+            lesson = await Lesson.create(
               {
-                lessonId: createdLesson.id,
-                title: taskFromClient.title,
-                description: taskFromClient.description || null,
-                type: taskFromClient.type,
-                order: taskIndex,
-                language: taskFromClient.language || "",
-                correctOutput: taskFromClient.expectedText || taskFromClient.correctOutput || "",
-                startCode: taskFromClient.startCode || "",
+                moduleId: module.id,
+                title: lessonData.title,
+                description: lessonData.description || null,
+                difficultyLevel: lessonData.difficultyLevel || null,
+                order: lessonIndex,
               },
               { client: trx }
             )
+          }
+
+          // 7️⃣ Работа с заданиями
+          const incomingTaskIds = (lessonData.tasks || []).filter((t: Task) => t.id).map((t:Task) => t.id)
+
+          await Task.query({ client: trx })
+            .where('lessonId', lesson.id)
+            .whereNotIn('id', incomingTaskIds)
+            .delete()
+
+          for (let taskIndex = 0; taskIndex < (lessonData.tasks || []).length; taskIndex++) {
+            const taskData = lessonData.tasks[taskIndex]
+            let task: Task | null
+            task = await Task.find(taskData.id, { client: trx })
+            if (task) {
+              task.merge({
+                title: taskData.title,
+                description: taskData.description || null,
+                type: taskData.type,
+                order: taskIndex,
+                language: taskData.language || "",
+                correctOutput: taskData.expectedText ?? taskData.correctOutput ?? "",
+                startCode: taskData.startCode || "",
+              })
+              await task.save()
+            } else {
+              task = await Task.create(
+                {
+                  lessonId: lesson.id,
+                  title: taskData.title,
+                  description: taskData.description || null,
+                  type: taskData.type,
+                  order: taskIndex,
+                  language: taskData.language || "",
+                  correctOutput: taskData.expectedText ?? taskData.correctOutput ?? "",
+                  startCode: taskData.startCode || "",
+                },
+                { client: trx }
+              )
+            }
+
+            // 8️⃣ Работа с опциями (для quiz)
+            if (taskData.type === 'quiz') {
+              const incomingOptionIds = (taskData.options || []).filter((o: TaskOption) => o.id).map((o: TaskOption) => o.id)
+
+              await TaskOption.query({ client: trx })
+                .where('taskId', task.id)
+                .whereNotIn('id', incomingOptionIds)
+                .delete()
+
+              for (let optionIndex = 0; optionIndex < (taskData.options || []).length; optionIndex++) {
+                const optionData = taskData.options[optionIndex]
+                let option: TaskOption | null
+                option = await TaskOption.find(optionData.id, { client: trx })
+
+                if (option) {
+                  option.merge({
+                    text: optionData.text ?? optionData,
+                    isCorrect: optionData.isCorrect ?? false,
+                    order: optionIndex,
+                  })
+                  await option.save()
+                } else {
+                  await TaskOption.create(
+                    {
+                      taskId: task.id,
+                      text: optionData.text ?? optionData,
+                      isCorrect: optionIndex === taskData.correctOption,
+                      order: optionIndex,
+                    },
+                    { client: trx }
+                  )
+                }
+              }
+            }
           }
         }
       }
@@ -365,6 +442,7 @@ export default class CoursesController {
       return response.internalServerError({ error: "Failed to update course" })
     }
   }
+
   async destroy({ params, response, auth }: HttpContext) {
     const course = await Course.findOrFail(params.id)
 

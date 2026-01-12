@@ -42,13 +42,12 @@ export default class UserProgressController {
             if (!firstModule || !firstLesson) {
                 return response.badRequest({ message: 'Course has no lessons' })
             }
-            
+
             const enrollment = await UserProgress.create({
                 userId: user.id,
                 courseId: courseId,
                 isCompleted: false,
                 lessonId: firstLesson.id,
-                progressPercent: 0,
                 lastViewedAt: DateTime.now(),
             })
 

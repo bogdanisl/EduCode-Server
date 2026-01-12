@@ -1,9 +1,11 @@
-import { BaseModel, column, hasMany, belongsTo } from '@adonisjs/lucid/orm'
+import { BaseModel, column, hasMany, belongsTo, computed } from '@adonisjs/lucid/orm'
 import Lesson from '../course/lesson.js'
 import TaskOption from './task_option.js'
 import TaskExample from './task_example.js'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import { DateTime } from 'luxon'
+import { TaskLanguageMap } from '../../constants/task_languages.js'
+
 
 export default class Task extends BaseModel {
   @column({ isPrimary: true })
@@ -25,8 +27,13 @@ export default class Task extends BaseModel {
   declare order: number
 
   @column()
-  declare language: string
-  
+  declare language: number
+
+  @computed()
+  get languageName() {
+    return TaskLanguageMap[this.language] ?? 'Unknown'
+  }
+
   @column()
   declare correctOutput: string
 
@@ -38,7 +45,7 @@ export default class Task extends BaseModel {
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
-  
+
   // Отношения
   @belongsTo(() => Lesson, { foreignKey: 'lessonId' })
   declare lesson: BelongsTo<typeof Lesson>

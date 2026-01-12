@@ -1,4 +1,4 @@
-import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
+import { BaseModel, column, belongsTo, computed } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import User from './user.js'
 import Course from '../course/course.js'
@@ -18,11 +18,12 @@ export default class UserProgress extends BaseModel {
   @column()
   declare lessonId: number
 
-  @column()
-  declare progressPercent: number
 
   @column()
   declare isCompleted: boolean
+
+  @column()
+  declare completedLessonsCount: number
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -33,6 +34,9 @@ export default class UserProgress extends BaseModel {
   @column.dateTime()
   declare lastViewedAt: DateTime | null
 
+
+
+
   @belongsTo(() => User)
   declare user: BelongsTo<typeof User>
 
@@ -41,4 +45,14 @@ export default class UserProgress extends BaseModel {
 
   @belongsTo(() => Lesson)
   declare lesson: BelongsTo<typeof Lesson>
+
+  @computed()
+  get progressPercent() {
+    if (!this.course || this.course.totalLessonsCount === 0) {
+      return 0
+    }
+    return Math.floor(
+      (this.completedLessonsCount / this.course.totalLessonsCount) * 100
+    )
+  }
 }

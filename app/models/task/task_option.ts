@@ -18,9 +18,6 @@ export default class TaskOption extends BaseModel {
   @column()
   declare order: number
 
-  @column()
-  declare language: string
-
 
   @belongsTo(() => Task)
   declare task: BelongsTo<typeof Task>

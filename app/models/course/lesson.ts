@@ -1,4 +1,4 @@
-import { BaseModel, belongsTo, column, hasMany } from '@adonisjs/lucid/orm'
+import { afterCreate, afterDelete, BaseModel, belongsTo, column, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 
 import { DateTime } from 'luxon'
@@ -36,4 +36,23 @@ export default class Lesson extends BaseModel {
 
   @hasMany(() => Task, { foreignKey: 'lessonId' })
   declare tasks: HasMany<typeof Task>
+
+  @afterCreate()
+  public static async afterCreateHook(lesson: Lesson) {
+    const module = await Module.find(lesson.moduleId)
+
+    if (!module) return
+
+    await module.load('course')
+    await module.course.recalcTotalLessonsCount()
+  }
+
+  @afterDelete()
+  public static async afterDeleteHook(lesson: Lesson) {
+    const module = await Module.find(lesson.moduleId)
+    if (!module) return
+
+    await module.load('course')
+    await module.course.recalcTotalLessonsCount()
+  }
 }
