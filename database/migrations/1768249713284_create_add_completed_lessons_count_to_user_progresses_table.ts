@@ -1,7 +1,7 @@
 import { BaseSchema } from '@adonisjs/lucid/schema'
 
 export default class AddCompletedLessonsCountToUserProgress extends BaseSchema {
-  protected tableName = 'user_progress'
+  protected tableName = 'user_progresses'
 
   async up() {
     this.schema.alterTable(this.tableName, (table) => {
