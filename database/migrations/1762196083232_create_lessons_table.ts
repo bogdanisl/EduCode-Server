@@ -8,7 +8,7 @@ export default class extends BaseSchema {
     this.schema.createTable(this.tableName, (table) => {
       table.increments('id').primary()
       table.integer('module_id').unsigned().references('id').inTable('modules').onDelete('CASCADE')
-      table.string('title').notNullable()
+      table.string('title',191).notNullable()
       table.text('description').nullable()
       table.enum('difficulty_level', ['beginner', 'intermediate', 'advanced']).nullable()
       table.integer('order').defaultTo(0)

@@ -6,9 +6,9 @@ export default class extends BaseSchema {
   async up() {
     this.schema.createTable(this.tableName, (table) => {
       table.increments('id')
-      table.string('title').notNullable()
+      table.string('title',191).notNullable()
       table.text('description').notNullable()
-      table.string('difficulty').defaultTo('beginner')
+      table.string('difficulty',191).defaultTo('beginner')
       table
         .integer('category_id')
         .unsigned()

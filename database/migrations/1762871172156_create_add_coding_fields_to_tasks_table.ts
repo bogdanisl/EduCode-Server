@@ -8,7 +8,7 @@ export default class extends BaseSchema {
   async up() {
     this.schema.alterTable(this.tableName, (table) => {
       table
-        .string('language')
+        .string('language',191)
         .notNullable()
         .defaultTo('typescript')
         .after('type')

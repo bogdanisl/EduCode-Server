@@ -6,8 +6,8 @@ export default class ResetTokens extends BaseSchema {
   async up() {
     this.schema.createTable(this.tableName, (table) => {
       table.increments('id')
-      table.string('email').notNullable()
-      table.string('token').notNullable()
+      table.string('email',191).notNullable()
+      table.string('token',191).notNullable()
       table.timestamp('expires_at').notNullable()
       table.timestamps(true, true)
     })

@@ -7,9 +7,9 @@ export default class extends BaseSchema {
     this.schema.createTable(this.tableName, (table) => {
       table.increments('id')
       table.integer('lesson_id').unsigned().references('id').inTable('lessons').onDelete('CASCADE')
-      table.string('title').notNullable()
+      table.string('title',191).notNullable()
       table.text('description').notNullable()
-      table.string('type').notNullable() // quiz, code, text
+      table.string('type',191).notNullable() // quiz, code, text
       table.integer('order').defaultTo(0)
       table.timestamps(true)
     })
