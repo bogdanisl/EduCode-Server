@@ -1,4 +1,3 @@
-// app/controllers/lessons_controller.ts
 import Lesson from '#models/course/lesson'
 import type { HttpContext } from '@adonisjs/core/http'
 

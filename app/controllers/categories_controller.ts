@@ -1,5 +1,3 @@
-// import type { HttpContext } from '@adonisjs/core/http'
-
 import CourseCategory from "#models/course/course_category"
 import { HttpContext } from "@adonisjs/core/http"
 

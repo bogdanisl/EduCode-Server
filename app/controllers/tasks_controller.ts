@@ -1,4 +1,3 @@
-// app/controllers/tasks_controller.ts
 import Lesson from '#models/course/lesson'
 import Module from '#models/course/module'
 import Task from '#models/task/task'
@@ -39,21 +38,13 @@ export default class TasksController {
 
         const { code } = await this.validateCode(request)
 
-        // Запускаем код через Judge0 Cloud
         const result = await runner.execute(code, 63)
-        // console.log({code:task});
-        // const result = {
-        //   output:'',
-        //   success:false,
-        //   console:'',
-        //   error:''
-        // }
+
         const expected = (task.correctOutput || '').trim()
         const received = result.output.trim()
 
 
         isCorrect = result.success && received === expected
-        // Возвращаем всё, что нужно фронтенду
         extra = {
           output: result.output,
           console: result.console,
@@ -72,15 +63,13 @@ export default class TasksController {
     if (isCorrect) {
       const lesson = await Lesson.findOrFail(task.lessonId);
       const tasks = await Task.query().where('lessonId', lesson.id);
-      if (tasks.length -1 == task.order) {
+      if (tasks.length - 1 == task.order) {
 
         const lessons = await Lesson.query().where('moduleId', lesson.moduleId);
         const module = await Module.query().where('id', lesson.moduleId).firstOrFail();
-        console.log(lessons.length)
-        console.log(lesson.order)
-        if (lessons.length -1 == lesson.order) {
-          if (module) {
-            console.log('should load next module in course');
+
+        if (lessons.length - 1 == lesson.order) {
+          if (module) { // load first lesson of next module
             const modules = await Module.query().where('courseId', module.courseId);
             const nextModule = modules.find(m => m.order == module.order + 1);
             if (nextModule) {
@@ -92,8 +81,7 @@ export default class TasksController {
             }
           }
         }
-        else {
-          console.log('should load next lesson in same module');
+        else { // load next lesson of this module
           if (module) {
             const user = auth.user!;
             const progress = await UserProgress.query().where('userId', user.id).where('courseId', module.courseId).first();
@@ -104,8 +92,7 @@ export default class TasksController {
                 progress.lessonId = nextLessonId;
                 progress.completedLessonsCount += 1;
               }
-              else {
-                console.log('course done')
+              else { // no next lesson means course completed
                 progress.isCompleted = true;
                 nextLessonId = -2;
                 progress.completedLessonsCount += 1;

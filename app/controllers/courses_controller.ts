@@ -1,5 +1,3 @@
-// import type { HttpContext } from '@adonisjs/core/http'
-
 import Course from "#models/course/course";
 import Lesson from "#models/course/lesson";
 import Module from "#models/course/module";
@@ -67,9 +65,6 @@ export default class CoursesController {
     const data = request.only(['title', 'description', 'difficulty', 'categoryId', 'modules'])
     const cover = request.file('cover')
 
-    //console.log("Incoming data:", data)
-
-    // Парсим modules (т.к. с фронта приходит строка)
     let modules = []
     try {
       modules = typeof data.modules === 'string' ? JSON.parse(data.modules) : data.modules
@@ -77,7 +72,6 @@ export default class CoursesController {
       return response.badRequest({ error: "Invalid modules format" })
     }
 
-    // Создаём курс
     const course = await Course.create({
       title: data.title,
       description: data.description,
@@ -87,7 +81,6 @@ export default class CoursesController {
     })
 
 
-    // Загружаем обложку
     if (cover) {
       if (!cover.isValid) {
         return response.badRequest({ error: cover.errors })
@@ -95,9 +88,6 @@ export default class CoursesController {
       await cover.move('public/assets/courses/covers', { name: `${course.id}.png` })
     }
 
-    // ============================
-    //   СОЗДАЁМ МОДУЛИ
-    // ============================
 
     for (let moduleIndex = 0; moduleIndex < modules.length; moduleIndex++) {
       const moduleFromClient = modules[moduleIndex]
@@ -106,14 +96,11 @@ export default class CoursesController {
         courseId: course.id,
         title: moduleFromClient.title,
         description: moduleFromClient.description || null,
-        order: moduleIndex, // правильный порядок
+        order: moduleIndex,
       })
 
       const lessons = moduleFromClient.lessons || []
 
-      // ============================
-      //   СОЗДАЁМ УРОКИ
-      // ============================
 
       for (let lessonIndex = 0; lessonIndex < lessons.length; lessonIndex++) {
         const lessonFromClient = lessons[lessonIndex]
@@ -123,14 +110,11 @@ export default class CoursesController {
           title: lessonFromClient.title,
           description: lessonFromClient.description || null,
           difficultyLevel: lessonFromClient.difficultyLevel || null,
-          order: lessonIndex, // правильный порядок
+          order: lessonIndex,
         })
 
         const tasks = lessonFromClient.tasks || []
 
-        // ============================
-        //   СОЗДАЁМ ЗАДАНИЯ
-        // ============================
 
         for (let taskIndex = 0; taskIndex < tasks.length; taskIndex++) {
           const taskFromClient = tasks[taskIndex]
@@ -140,8 +124,8 @@ export default class CoursesController {
             title: taskFromClient.title,
             description: taskFromClient.description,
             type: taskFromClient.type,
-            order: taskIndex, // правильный порядок
-            language: taskFromClient.language || "",     // обязательно
+            order: taskIndex,
+            language: taskFromClient.language || "",
             correctOutput: taskFromClient.expectedText || taskFromClient.correctOutput || "",
             startCode: taskFromClient.startCode || "",
           })
@@ -160,12 +144,9 @@ export default class CoursesController {
               })
             }
           }
-          // Если будут options/examples — напишу также
         }
       }
     }
-
-
 
     return response.ok({
       message: "Course created successfully",
@@ -176,7 +157,6 @@ export default class CoursesController {
     const courseId = Number(params.id)
     console.log('Course show')
     try {
-      // Загружаем курс со всей структурой
       const course = await Course.query()
         .where('id', courseId)
         .preload('category')
@@ -201,9 +181,7 @@ export default class CoursesController {
         return response.notFound({ message: 'Course not found' })
       }
 
-      // Проверяем, авторизован ли пользователь
       const user = auth.user
-      //console.log(user)
       let enrolled = null
 
       if (user) {
@@ -214,7 +192,6 @@ export default class CoursesController {
           .first()
       }
       
-      // Возвращаем курс + информацию о записи (если есть)
       return response.ok({
         course,
         enrolled,
@@ -231,11 +208,9 @@ export default class CoursesController {
   async update({ request, response, params, auth }: HttpContext) {
     const courseId = params.id
 
-    // Получаем данные с фронта
     const data = request.only(['title', 'description', 'difficulty', 'categoryId', 'modules'])
     const cover = request.file('cover')
 
-    // Парсим модули
     let modules: any[] = []
     try {
       modules = typeof data.modules === 'string' ? JSON.parse(data.modules) : data.modules
@@ -247,21 +222,18 @@ export default class CoursesController {
     const trx = await db.transaction()
 
     try {
-      // 1️⃣ Находим курс
       const course = await Course.find(courseId, { client: trx })
       if (!course) {
         await trx.rollback()
         return response.notFound({ error: "Course not found" })
       }
 
-      // 2️⃣ Проверка авторства
       const user = auth.user
       if (course.createdBy !== user?.id && user?.role !== 'admin') {
         await trx.rollback()
         return response.unauthorized({ error: "You are not authorized to update this course" })
       }
 
-      // 3️⃣ Обновляем основные поля курса
       course.merge({
         title: data.title,
         description: data.description,
@@ -270,7 +242,6 @@ export default class CoursesController {
       })
       await course.save()
 
-      // 4️⃣ Обрабатываем новую обложку
       if (cover) {
         if (!cover.isValid) {
           await trx.rollback()
@@ -283,23 +254,19 @@ export default class CoursesController {
         })
       }
 
-      // 5️⃣ Работа с модулями
 
       const incomingModuleIds = modules.filter(m => m.id).map(m => m.id)
-      // Удаляем модули, которых больше нет
       await Module.query({ client: trx })
         .where('courseId', course.id)
         .whereNotIn('id', incomingModuleIds)
         .delete()
 
-      // Обрабатываем каждый модуль
       for (let moduleIndex = 0; moduleIndex < modules.length; moduleIndex++) {
         const moduleData = modules[moduleIndex]
         let module: Module | null
 
         module = await Module.find(moduleData.id, { client: trx })
         if (module) {
-          // UPDATE
           module.merge({
             title: moduleData.title,
             description: moduleData.description || null,
@@ -307,7 +274,6 @@ export default class CoursesController {
           })
           await module.save()
         } else {
-          // CREATE
           module = await Module.create(
             {
               courseId: course.id,
@@ -319,7 +285,6 @@ export default class CoursesController {
           )
         }
 
-        // 6️⃣ Работа с уроками
         const incomingLessonIds = (moduleData.lessons || []).filter((l: Lesson) => l.id).map((l: Lesson) => l.id)
 
         await Lesson.query({ client: trx })
@@ -353,7 +318,6 @@ export default class CoursesController {
             )
           }
 
-          // 7️⃣ Работа с заданиями
           const incomingTaskIds = (lessonData.tasks || []).filter((t: Task) => t.id).map((t:Task) => t.id)
 
           await Task.query({ client: trx })
@@ -392,7 +356,6 @@ export default class CoursesController {
               )
             }
 
-            // 8️⃣ Работа с опциями (для quiz)
             if (taskData.type === 'quiz') {
               const incomingOptionIds = (taskData.options || []).filter((o: TaskOption) => o.id).map((o: TaskOption) => o.id)
 
@@ -467,7 +430,6 @@ export default class CoursesController {
       }
 
       await Lesson.query({ client: trx }).where('moduleId', id).delete()
-      //await Task.query({ client: trx }).where('moduleId', id).delete() // если по ошибке
     }
     await Module.query({ client: trx }).where('courseId', course.id).delete()
     //await Drive.use().delete(`public/course/cover/${fileName}`) <== TODO: Delete images

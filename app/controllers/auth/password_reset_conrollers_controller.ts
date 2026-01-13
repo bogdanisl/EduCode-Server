@@ -37,6 +37,7 @@ export default class PasswordResetController {
     //     .subject('Password Reset Code')
     //     .htmlView('emails/reset_code', { code })
     // })
+    
     console.log('Verefication Code: ' + code)
 
     return { message: 'Reset code sent to your email.' }
