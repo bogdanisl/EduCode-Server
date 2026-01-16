@@ -68,23 +68,34 @@ export default class TasksController {
         const lessons = await Lesson.query().where('moduleId', lesson.moduleId);
         const module = await Module.query().where('id', lesson.moduleId).firstOrFail();
 
+        const user = auth.user!;
+        const progress = await UserProgress.query().where('userId', user.id).where('courseId', module.courseId).first();
+
+
         if (lessons.length - 1 == lesson.order) {
           if (module) { // load first lesson of next module
             const modules = await Module.query().where('courseId', module.courseId);
             const nextModule = modules.find(m => m.order == module.order + 1);
-            if (nextModule) {
-              const nextLesson = await Lesson.query().where('moduleId', nextModule.id).where('order', 0).first();
-              if (nextLesson) {
-                nextLessonId = nextLesson.id;
-              }
+            if (progress) {
 
+              if (nextModule) {
+                const nextLesson = await Lesson.query().where('moduleId', nextModule.id).where('order', 0).first();
+                if (nextLesson) {
+                  nextLessonId = nextLesson.id;
+                  progress.completedLessonsCount += 1;
+                }
+              }
+              else { // no next module means course completed
+                progress.isCompleted = true;
+                nextLessonId = -2;
+                progress.completedLessonsCount += 1;
+              }
+              await progress.save();
             }
           }
         }
         else { // load next lesson of this module
           if (module) {
-            const user = auth.user!;
-            const progress = await UserProgress.query().where('userId', user.id).where('courseId', module.courseId).first();
             if (progress) {
               const nextLesson = await Lesson.query().where('moduleId', module.id).where('order', lesson.order + 1).first();
               if (nextLesson) {

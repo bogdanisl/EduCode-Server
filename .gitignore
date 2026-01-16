@@ -2,6 +2,7 @@
 node_modules
 build
 tmp
+database/migration_history
 
 # Secrets
 .env

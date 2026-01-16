@@ -34,6 +34,9 @@ export default class Course extends BaseModel {
   @column()
   declare totalLessonsCount: number
 
+  @column()
+  declare isVisible: boolean
+
   // Отношения
   @belongsTo(() => CourseCategory, { foreignKey: 'categoryId' })
   declare category: BelongsTo<typeof CourseCategory>
@@ -41,7 +44,7 @@ export default class Course extends BaseModel {
   @hasMany(() => Module, { foreignKey: 'courseId' })
   declare modules: HasMany<typeof Module>
 
-  
+
   public async recalcTotalLessonsCount() {
     const course = await Course.query()
       .where('id', this.id)

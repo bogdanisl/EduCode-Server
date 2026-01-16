@@ -41,11 +41,15 @@ export default class RegistersController {
     }
 
     // --- Create user ---
+    const usersCount = await User.query().count('* as total')
+    const isFirstUser = usersCount[0].$extras.total === 0
+    const role = isFirstUser ? 'admin' : 'user'
 
     const user = await User.create({
       fullName,
       email,
       password,
+      role
     })
 
     await auth.use('web').login(user)

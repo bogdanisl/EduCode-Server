@@ -51,6 +51,7 @@ export default class UserProgress extends BaseModel {
     if (!this.course || this.course.totalLessonsCount === 0) {
       return 0
     }
+    if(this.isCompleted) return 100
     return Math.floor(
       (this.completedLessonsCount / this.course.totalLessonsCount) * 100
     )

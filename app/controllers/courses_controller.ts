@@ -9,7 +9,8 @@ import db from '@adonisjs/lucid/services/db'
 
 
 export default class CoursesController {
-  async index({ response, request }: HttpContext) {
+  async index({ response, request, auth }: HttpContext) {
+    const user = auth.user;
     const limit = Number(request.qs().limit) || 10
     const offset = Number(request.qs().offset) || 0
 
@@ -37,7 +38,6 @@ export default class CoursesController {
     if (typeof difficultiesParam === 'string') {
       difficulties = difficultiesParam.split(',').map(String).filter(Boolean)
     }
-
     try {
       const courses = await Course.query()
         .if(categoryIds.length > 0, (query) => {
@@ -46,8 +46,20 @@ export default class CoursesController {
         .if(difficulties.length > 0, (query) => {
           query.whereIn('difficulty', difficulties)
         })
-        .if(searchText !== undefined && searchText.trim() !== '', (query) => {
+        .if(searchText && searchText.trim() !== '', (query) => {
           query.where('title', 'like', `%${searchText}%`)
+        })
+        .if(!user || user.role !== 'admin', (query) => {
+          query.where((q) => {
+            q.where('is_visible', true)
+            if (user?.role === 'tester') {
+              q.orWhere((sub) => {
+                sub
+                  .where('is_visible', false)
+                  .where('created_by', user.id)
+              })
+            }
+          })
         })
         .orderBy('created_at', 'desc')
         .offset(offset)
@@ -138,8 +150,8 @@ export default class CoursesController {
               const correctIndex = taskFromClient.correctOption;
               await TaskOption.create({
                 taskId: createdTask.id,
-                text: optionFromClient,
-                isCorrect: optionIndex == correctIndex ? true : false,
+                text: optionFromClient.text || optionFromClient,
+                isCorrect: optionFromClient.isCorrect ?? (optionIndex === correctIndex),
                 order: optionIndex,
               })
             }
@@ -155,7 +167,8 @@ export default class CoursesController {
   }
   async show({ params, auth, response }: HttpContext) {
     const courseId = Number(params.id)
-    console.log('Course show')
+    const user = auth.user
+
     try {
       const course = await Course.query()
         .where('id', courseId)
@@ -180,8 +193,14 @@ export default class CoursesController {
       if (!course) {
         return response.notFound({ message: 'Course not found' })
       }
+      if (course.isVisible == false) {
+        if (user?.role !== 'admin') {
+          if (user?.role !== 'tester' && course.createdBy !== user?.id) {
+            return response.unauthorized({ message: "User don't have access for this course" });
+          }
+        }
+      }
 
-      const user = auth.user
       let enrolled = null
 
       if (user) {
@@ -191,7 +210,7 @@ export default class CoursesController {
           .preload('course')
           .first()
       }
-      
+
       return response.ok({
         course,
         enrolled,
@@ -318,7 +337,7 @@ export default class CoursesController {
             )
           }
 
-          const incomingTaskIds = (lessonData.tasks || []).filter((t: Task) => t.id).map((t:Task) => t.id)
+          const incomingTaskIds = (lessonData.tasks || []).filter((t: Task) => t.id).map((t: Task) => t.id)
 
           await Task.query({ client: trx })
             .where('lessonId', lesson.id)
@@ -406,6 +425,27 @@ export default class CoursesController {
     }
   }
 
+  async changeVisibility({ params, response, auth }: HttpContext) {
+    const course = await Course.findOrFail(params.id)
+
+    if (!course) {
+      return response.notFound()
+    }
+    const user = auth.user
+    if (course.createdBy !== user?.id && user?.role !== 'admin') {
+      return response.unauthorized({ error: "You are not authorized to update this course" });
+    }
+    const trx = await db.transaction();
+
+    course.merge({
+      isVisible: !course.isVisible,
+    })
+    await course.save()
+    await trx.commit()
+
+    return response.ok({ message: 'Course visibility updated' })
+  }
+
   async destroy({ params, response, auth }: HttpContext) {
     const course = await Course.findOrFail(params.id)
 
@@ -413,7 +453,7 @@ export default class CoursesController {
       return response.notFound()
     }
     const user = auth.user
-    if (course.createdBy !== user?.id) {
+    if (course.createdBy !== user?.id && user?.role !== 'admin') {
       return response.unauthorized({ error: "You are not authorized to update this course" });
     }
     const trx = await db.transaction();
@@ -421,7 +461,8 @@ export default class CoursesController {
     const moduleIds = await Module.query({ client: trx })
       .where('courseId', course.id)
       .select('id')
-
+      
+    await UserProgress.query({client: trx}).where('courseId', course.id).delete() 
     for (const { id } of moduleIds) {
       const lessonIds = await Lesson.query({ client: trx }).where('moduleId', id).select('id')
 
